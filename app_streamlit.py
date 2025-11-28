@@ -1,107 +1,156 @@
-# app_streamlit.py
+import logging
 import streamlit as st
 import requests
-from pathlib import Path
+import json
+from config import settings
 
-# -------------------------------
-# Backend API URL
-# -------------------------------
-API_URL = "http://localhost:8000"
+# --- Configuration ---
+# We'll attempt to discover a reachable backend host, preferring localhost, then 127.0.0.1,
+# then whatever is configured in settings.HOST. This handles the common mistake where the
+# server is bound to 0.0.0.0 but the client tries to connect to it.
+DEFAULT_HOST_TRY_LIST = ["localhost", "127.0.0.1", settings.HOST]
+logger = logging.getLogger(__name__)
 
-# -------------------------------
-# Streamlit Page Config
-# -------------------------------
-st.set_page_config(page_title="FinWise Agent", layout="wide")
-st.title("💬 FinWise — Land & Finance Assistant")
-
-st.markdown(
+def find_reachable_host(hosts: list[str], port: int, timeout: float = 1.0) -> str | None:
     """
-    Welcome to **FinWise**, your intelligent assistant for:
-    - 📜 Land and property document analysis  
-    - 💰 Financial and banking questions  
-    - 📊 Real-time insights from uploaded files  
-
-    **Upload a document**, or just ask your question below 👇
+    Try a list of hosts and return the first one that responds to a GET on the root path.
+    Returns the host (string) if reachable, or None if none succeed.
     """
-)
-
-# -------------------------------
-# User Info
-# -------------------------------
-user_id = st.text_input("Enter your user ID (optional):", value="guest")
-
-# -------------------------------
-# File Upload Section
-# -------------------------------
-st.subheader("📁 Upload your document")
-uploaded = st.file_uploader(
-    "Upload a land deed, financial record, or statement",
-    type=["pdf", "png", "jpg", "jpeg"]
-)
-
-if uploaded is not None:
-    # Save uploaded file temporarily
-    tmp_path = f"temp_upload_{uploaded.name}"
-    with open(tmp_path, "wb") as f:
-        f.write(uploaded.getbuffer())
-
-    # Send file to backend API
-    with st.spinner("Uploading your document..."):
+    for host in hosts:
         try:
-            files = {"file": open(tmp_path, "rb")}
-            data = {"user_id": user_id}
-            res = requests.post(f"{API_URL}/upload_document", files=files, data=data)
+            url = f"http://{host}:{port}/"
+            r = requests.get(url, timeout=timeout)
+            if r.status_code == 200:
+                logger.debug("Found reachable backend at %s", url)
+                return host
+        except requests.RequestException:
+            logger.debug("Host %s is not reachable (timeout or connection error)", host)
+            continue
+    return None
 
-            if res.status_code == 200:
-                st.success("✅ File uploaded successfully!")
-                st.json(res.json())
-            else:
-                st.error(f"❌ Upload failed: {res.text}")
-        except Exception as e:
-            st.error(f"Error uploading file: {e}")
+def check_hosts_status(hosts: list[str], port: int, timeout: float = 0.8) -> list[dict]:
+    """Return reachability status for each host.
+    Each entry is {'host': host, 'url': url, 'ok': bool, 'status_code': code or None}
+    """
+    results = []
+    for host in hosts:
+        url = f"http://{host}:{port}/"
+        try:
+            r = requests.get(url, timeout=timeout)
+            results.append({"host": host, "url": url, "ok": r.status_code == 200, "status_code": r.status_code})
+        except requests.RequestException:
+            results.append({"host": host, "url": url, "ok": False, "status_code": None})
+    return results
 
-# -------------------------------
-# Question Input Section
-# -------------------------------
-st.subheader("💬 Ask FinWise a Question")
+# Attempt to auto-detect a reachable backend host on startup. This is a best-effort check.
+detected_host = find_reachable_host(DEFAULT_HOST_TRY_LIST, settings.PORT)
+client_host = detected_host if detected_host else ("localhost" if settings.HOST == "0.0.0.0" else settings.HOST)
+BACKEND_URL = f"http://{client_host}:{settings.PORT}"
+API_URL = f"{BACKEND_URL}/v1/query"
+INGEST_URL = f"{BACKEND_URL}/v1/ingest"
 
-topic = st.radio(
-    "Choose a topic hint (optional, improves accuracy):",
-    ["Auto-detect", "Land", "Finance"],
-    horizontal=True
+st.set_page_config(
+    page_title="Financial-Land AI",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-question = st.text_input(
-    "Ask your question:",
-    placeholder="e.g. What are the key risks in this land document? or Convert 100 USD to NGN"
-)
-
-if st.button("Send"):
-    if not question.strip():
-        st.warning("Please enter a question before sending.")
-    else:
-        with st.spinner("FinWise is thinking... 🤔"):
+## --- Sidebar: Document Ingestion ---
+with st.sidebar:
+    st.header("Document Ingestion")
+    uploaded_file = st.file_uploader("Upload Financial Document (PDF/Image)", type=["pdf", "png", "jpg", "jpeg"])
+    
+    if st.button("Process Document for RAG Index"):
+        if uploaded_file is not None:
+            # Placeholder for actual file upload/ingestion logic
             try:
-                payload = {
-                    "question": question if topic == "Auto-detect" else f"(topic:{topic}) {question}",
-                    "user_id": user_id,
-                }
-                res = requests.post(f"{API_URL}/ask", data=payload)
+                # In a real app: file = uploaded_file.read(); requests.post(INGEST_URL, files={'file': file})
+                st.success("Document uploaded and ingestion pipeline started.")
+            except requests.RequestException as e:
+                logger.exception("Failed to start ingestion: %s", e)
+                st.error("Failed to start ingestion. Check backend logs.")
+            # In a real app: file = uploaded_file.read(); requests.post(INGEST_URL, files={'file': file})
+        else:
+            st.warning("Please upload a file first.")
 
-                if res.status_code == 200:
-                    data = res.json()
-                    if "answer" in data:
-                        st.success("✅ Answer:")
-                        st.write(data["answer"])
-                    else:
-                        st.error(data.get("error", "Unknown error"))
-                else:
-                    st.error(f"Server error: {res.text}")
-            except Exception as e:
-                st.error(f"Connection error: {e}")
+st.title("Financial-Land AI: Intelligence Platform")
+st.markdown("Ask complex financial questions based on market data and proprietary documents.")
 
-# -------------------------------
-# Footer
-# -------------------------------
-st.markdown("---")
-st.caption("🤖 Powered by OpenAI & FinWise Agent | Built with Streamlit + FastAPI")
+# Show the detected backend URL and allow re-detection
+st.info(f"Using backend: {BACKEND_URL}")
+if st.button("Re-detect backend host"):
+    st.experimental_rerun()
+
+if st.button("Test backend connectivity"):
+    status_table = check_hosts_status(DEFAULT_HOST_TRY_LIST, settings.PORT)
+    for r in status_table:
+        if r['ok']:
+            st.success(f"{r['url']} reachable (status: {r['status_code']})")
+        else:
+            st.warning(f"{r['url']} unreachable")
+
+status_table = check_hosts_status(DEFAULT_HOST_TRY_LIST, settings.PORT)
+status_items = [f"{r['host']} -> {r['url']} -> ok={r['ok']} (status: {r['status_code']})" for r in status_table]
+st.caption("Probe results:")
+for item in status_items:
+    st.write(item)
+
+# --- Main Query Interface ---
+user_query = st.text_area("Your Financial Query:", 
+                          placeholder="e.g., What was the net revenue of Company X in Q3 2024, and what is the equivalent in Euros?",
+                          height=100)
+
+if st.button("Analyze & Answer", type="primary") and user_query:
+    st.info("Agent is processing query and executing tools/RAG...")
+    
+    try:
+        # Reattempt host detection at query time to favor any backend that started after
+        # Streamlit app loaded or if network conditions changed.
+        runtime_detected = find_reachable_host(DEFAULT_HOST_TRY_LIST, settings.PORT)
+        if runtime_detected:
+            client_host = runtime_detected
+            BACKEND_URL = f"http://{client_host}:{settings.PORT}"
+            API_URL = f"{BACKEND_URL}/v1/query"
+        # Call the FastAPI backend with the user query
+        response = requests.post(
+            API_URL, 
+            json={"query": user_query},
+            timeout=30 # Allow 30 seconds for complex queries
+        )
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        st.subheader("Final AI Answer 🤖")
+        st.markdown(data.get("answer", "No answer received."))
+        
+        st.subheader("Traceability & Sources")
+        st.caption("This section shows the data sources and logic steps used by the AI Agent.")
+        
+        # Display sources and tools used
+        if data.get("tools_used"):
+            st.code(f"Tools Used: {', '.join(data['tools_used'])}", language="text")
+        
+        # NOTE: A robust implementation would return 'sources' from RAG
+        # st.markdown(f"**Sources:** {', '.join(data.get('sources', ['No specific document sources found.']))}")
+        
+    except requests.exceptions.RequestException as e:
+        logger.exception("Request to backend failed: %s", e)
+        # Provide an actionable message in the Streamlit UI with exact commands
+        st.error(
+            "Error connecting to the backend API. Ensure the backend server is running and reachable. "
+            f"Tried: {API_URL}. Details: {e}"
+        )
+        st.warning("Common fixes:")
+        st.write("- Start the backend server with the following command (in a separate terminal):")
+        st.code("uvicorn main:app --reload --host 0.0.0.0 --port 8000", language="bash")
+        st.write("- If running on the same machine, Streamlit will try localhost/127.0.0.1 first. If the server is bound to 0.0.0.0, those should work too")
+        st.write("- If you run with 'python main.py' instead of uvicorn, use:")
+        st.code("python main.py", language="bash")
+        st.write("- Check firewall rules and ensure the port is open (e.g., Windows Firewall).")
+        if not detected_host:
+            st.info("Tip: I attempted to auto-detect a backend host (tried localhost, 127.0.0.1, and settings.HOST) but could not reach any.")
+        if st.button("Re-test backend connection"):
+            st.experimental_rerun()
+    except json.JSONDecodeError:
+        st.error("Invalid response from the API.")

@@ -1,20 +1,42 @@
+#fastapi
+#uvicorn[standard]
+#python-dotenv
+#pydantic
+#langchain
+#chromadb
+#sentence-transformers
+#openai
+#groq
+#pdfplumber
+#pytesseract
+#pillow
+#requests
+#streamlit
+#sqlalchemy
+#psycopg2-binary
+#python-multipart
+#yfinance
+
+#yalog
+
+
+# Web Framework & Serialization
 fastapi
 uvicorn[standard]
-python-dotenv
 pydantic
-langchain
-chromadb
-sentence-transformers
-openai
-groq
-pdfplumber
-pytesseract
-pillow
-requests
-streamlit
-sqlalchemy
-psycopg2-binary
-python-multipart
-yfinance
+python-dotenv
 
-yalog
+# AI & Tooling
+google-genai
+langchain-core  # For Agent orchestration (optional, but good practice)
+requests
+pandas
+pytest
+pytest-mock
+ruff
+pytest
+ruff
+
+# Document Handling (Lite version)
+# pypdf (for doc_analyzer.py)
+# pillow (for ocr_tool.py)

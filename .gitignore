@@ -1,22 +1,22 @@
-# Byte-compiled / optimized / DLL files
+# Python artifacts
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
 
-# Virtual environment
+# Virtual Environment
+.venv/
 venv/
+env/
+
+# Configuration and Logs (CRITICAL)
 .env
-
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Logs
 *.log
+audit_trail.log
 
-# Temporary files
-*.tmp
-temp_upload_*
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Jupyter/IDE files
+.ipynb_checkpoints
+.vscode/
