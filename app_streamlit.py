@@ -77,7 +77,10 @@ st.title("Financial-Land AI: Intelligence Platform")
 st.markdown("Ask complex financial questions based on market data and proprietary documents.")
 
 # Show the detected backend URL and allow re-detection
-st.info(f"Using backend: {BACKEND_URL}")
+if detected_host:
+    st.success(f"Using backend: {BACKEND_URL} (detected)")
+else:
+    st.warning(f"Using backend: {BACKEND_URL} — could not auto-detect reachable host; you may need to start the server.")
 if st.button("Re-detect backend host"):
     st.experimental_rerun()
 
@@ -90,10 +93,17 @@ if st.button("Test backend connectivity"):
             st.warning(f"{r['url']} unreachable")
 
 status_table = check_hosts_status(DEFAULT_HOST_TRY_LIST, settings.PORT)
-status_items = [f"{r['host']} -> {r['url']} -> ok={r['ok']} (status: {r['status_code']})" for r in status_table]
 st.caption("Probe results:")
-for item in status_items:
-    st.write(item)
+probe_rows = []
+for r in status_table:
+    status_text = "✅ Reachable" if r['ok'] else "❌ Unreachable"
+    probe_rows.append({
+        "host": r['host'],
+        "url": r['url'],
+        "status": status_text,
+        "code": r['status_code']
+    })
+st.table(probe_rows)
 
 # --- Main Query Interface ---
 user_query = st.text_area("Your Financial Query:", 
@@ -101,56 +111,54 @@ user_query = st.text_area("Your Financial Query:",
                           height=100)
 
 if st.button("Analyze & Answer", type="primary") and user_query:
-    st.info("Agent is processing query and executing tools/RAG...")
-    
-    try:
-        # Reattempt host detection at query time to favor any backend that started after
-        # Streamlit app loaded or if network conditions changed.
-        runtime_detected = find_reachable_host(DEFAULT_HOST_TRY_LIST, settings.PORT)
-        if runtime_detected:
-            client_host = runtime_detected
-            BACKEND_URL = f"http://{client_host}:{settings.PORT}"
-            API_URL = f"{BACKEND_URL}/v1/query"
-        # Call the FastAPI backend with the user query
-        response = requests.post(
-            API_URL, 
-            json={"query": user_query},
-            timeout=30 # Allow 30 seconds for complex queries
-        )
-        response.raise_for_status()
-        
-        data = response.json()
-        
-        st.subheader("Final AI Answer 🤖")
-        st.markdown(data.get("answer", "No answer received."))
-        
-        st.subheader("Traceability & Sources")
-        st.caption("This section shows the data sources and logic steps used by the AI Agent.")
-        
-        # Display sources and tools used
-        if data.get("tools_used"):
-            st.code(f"Tools Used: {', '.join(data['tools_used'])}", language="text")
-        
-        # NOTE: A robust implementation would return 'sources' from RAG
-        # st.markdown(f"**Sources:** {', '.join(data.get('sources', ['No specific document sources found.']))}")
-        
-    except requests.exceptions.RequestException as e:
-        logger.exception("Request to backend failed: %s", e)
-        # Provide an actionable message in the Streamlit UI with exact commands
-        st.error(
-            "Error connecting to the backend API. Ensure the backend server is running and reachable. "
-            f"Tried: {API_URL}. Details: {e}"
-        )
-        st.warning("Common fixes:")
-        st.write("- Start the backend server with the following command (in a separate terminal):")
-        st.code("uvicorn main:app --reload --host 0.0.0.0 --port 8000", language="bash")
-        st.write("- If running on the same machine, Streamlit will try localhost/127.0.0.1 first. If the server is bound to 0.0.0.0, those should work too")
-        st.write("- If you run with 'python main.py' instead of uvicorn, use:")
-        st.code("python main.py", language="bash")
-        st.write("- Check firewall rules and ensure the port is open (e.g., Windows Firewall).")
-        if not detected_host:
-            st.info("Tip: I attempted to auto-detect a backend host (tried localhost, 127.0.0.1, and settings.HOST) but could not reach any.")
-        if st.button("Re-test backend connection"):
-            st.experimental_rerun()
-    except json.JSONDecodeError:
-        st.error("Invalid response from the API.")
+    with st.spinner('Agent is processing query and executing tools/RAG...'):
+        try:
+            # Reattempt host detection at query time to favor any backend that started after
+            # Streamlit app loaded or if network conditions changed.
+            runtime_detected = find_reachable_host(DEFAULT_HOST_TRY_LIST, settings.PORT)
+            if runtime_detected:
+                client_host = runtime_detected
+                BACKEND_URL = f"http://{client_host}:{settings.PORT}"
+                API_URL = f"{BACKEND_URL}/v1/query"
+            # Call the FastAPI backend with the user query
+            response = requests.post(
+                API_URL, 
+                json={"query": user_query},
+                timeout=30 # Allow 30 seconds for complex queries
+            )
+            response.raise_for_status()
+
+            data = response.json()
+
+            st.subheader("Final AI Answer 🤖")
+            st.markdown(data.get("answer", "No answer received."))
+
+            st.subheader("Traceability & Sources")
+            st.caption("This section shows the data sources and logic steps used by the AI Agent.")
+
+            # Display sources and tools used
+            if data.get("tools_used"):
+                st.code(f"Tools Used: {', '.join(data['tools_used'])}", language="text")
+
+            # NOTE: A robust implementation would return 'sources' from RAG
+            # st.markdown(f"**Sources:** {', '.join(data.get('sources', ['No specific document sources found.']))}")
+        except requests.exceptions.RequestException as e:
+            logger.exception("Request to backend failed: %s", e)
+            # Provide an actionable message in the Streamlit UI with exact commands
+            st.error(
+                "Error connecting to the backend API. Ensure the backend server is running and reachable. "
+                f"Tried: {API_URL}. Details: {e}"
+            )
+            st.warning("Common fixes:")
+            st.write("- Start the backend server with the following command (in a separate terminal):")
+            st.code("uvicorn main:app --reload --host 0.0.0.0 --port 8000", language="bash")
+            st.write("- If running on the same machine, Streamlit will try localhost/127.0.0.1 first. If the server is bound to 0.0.0.0, those should work too")
+            st.write("- If you run with 'python main.py' instead of uvicorn, use:")
+            st.code("python main.py", language="bash")
+            st.write("- Check firewall rules and ensure the port is open (e.g., Windows Firewall).")
+            if not detected_host:
+                st.info("Tip: I attempted to auto-detect a backend host (tried localhost, 127.0.0.1, and settings.HOST) but could not reach any.")
+            if st.button("Re-test backend connection"):
+                st.experimental_rerun()
+        except json.JSONDecodeError:
+            st.error("Invalid response from the API.")
