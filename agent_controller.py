@@ -1,8 +1,8 @@
 # agent_controller.py
 
 import logging
-from google import genai
 from config import settings
+from llm_client import generate_content
 from audit import log_interaction
 
 # --- IMPORTANT: CORRECTED IMPORTS FOR TOOLS ---
@@ -14,13 +14,7 @@ from tools.registry_check import verify_company_registry
 
 logger = logging.getLogger(__name__)
 
-# Initialize the Gemini client
-try:
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
-except Exception as e:
-    # This prevents the module from crashing immediately on startup if the key is bad
-    logger.error("Failed to initialize Gemini Client at startup: %s", e)
-    client = None
+# No SDK client at module level: we will use `llm_client.generate_content` for provider-agnostic calls
 
 # Define the available tools (must match the function names imported)
 tools = {
@@ -40,14 +34,8 @@ def process_query_with_agent(user_query: str) -> dict:
 
     # 1. Initial Call: Ask the LLM to decide on a tool
     try:
-        # Note: the genai `generate_content` API does not accept a 'tools' parameter
-        # in this SDK. We instead rely on the model generating structured function
-        # calls in its content; the agent will parse `response.function_calls` and
-        # map them to local functions via the `tools` dict.
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=user_query
-        )
+        # Use LLM provider wrapper; provider might be Groq, Gemini, etc.
+        response = generate_content(user_query, model=settings.RAG_MODEL)
     except Exception as e:
         # Replaces temporary debug print with a controlled return
         logger.exception("Agent execution error: %s", e)
@@ -56,7 +44,7 @@ def process_query_with_agent(user_query: str) -> dict:
         return {"final_answer": "Agent system error. Please check configuration.", "used_tools": []}
 
     # 2. Check for Tool Calls
-    if response.function_calls:
+    if getattr(response, 'function_calls', None):
         tool_results = {}
         
         # Execute all tool calls requested by the model
@@ -89,13 +77,11 @@ def process_query_with_agent(user_query: str) -> dict:
              )
 
         # Send back to Gemini to generate the final answer
-        final_response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[user_query] + tool_response_parts # Combine original query and tool outputs
-        )
+        # Final LLM synthesis: use the configured provider again
+        final_response = generate_content([user_query] + tool_response_parts, model=settings.RAG_MODEL)
 
         return {
-            "final_answer": final_response.text,
+            "final_answer": getattr(final_response, 'text', str(final_response)),
             "used_tools": list(tool_results.keys())
         }
         

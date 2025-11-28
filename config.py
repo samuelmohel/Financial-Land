@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # External API configuration for currency exchange provider
     EXCHANGE_RATE_BASE_URL: str = "https://v6.exchangerate-api.com/v6"
     EXCHANGE_RATE_API_KEY: str = ""
+    # LLM Provider configuration
+    LLM_PROVIDER: Literal['gemini', 'groq'] = 'gemini'
+    GROQ_API_KEY: str = ''
+    GROQ_MODEL: str = 'groq-1.0'  # default; adjust to available Groq model
     # Optional external registry API endpoint for validating company details
     REGISTRY_API_URL: str = ""
 

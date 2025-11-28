@@ -28,5 +28,12 @@ This project uses a `.env` file to manage sensitive configuration like API keys.
 - `FINANCIAL_DATA_API_KEY` – API key for structured financial data (sometimes used as exchange-api key)
 - `EXCHANGE_RATE_BASE_URL` – Base URL for exchange rate provider, e.g. `https://v6.exchangerate-api.com/v6`
 - `EXCHANGE_RATE_API_KEY` – Optional provider-specific API key if the provider requires it in path or header.
+ - `LLM_PROVIDER` – Which LLM provider to use (gemini or groq). Defaults to `gemini`.
+ - `GROQ_API_KEY` – If using Groq, set your API key here.
+ - `GROQ_MODEL` – The Groq model to use (e.g. `groq-1.0`).
 
 After editing `.env`, keep it secret and ensure it's included in `.gitignore` to avoid accidental commits.
+
+Using Groq or Gemini
+- To use Groq: set `LLM_PROVIDER=groq`, `GROQ_API_KEY` and `GROQ_MODEL` in your `.env`. The app will use Groq for generation and parse a JSON snippet in the model output for function calls.
+- To use Gemini: set `LLM_PROVIDER=gemini` and `GEMINI_API_KEY` in your `.env`. This is the default provider.
