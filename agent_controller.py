@@ -40,10 +40,13 @@ def process_query_with_agent(user_query: str) -> dict:
 
     # 1. Initial Call: Ask the LLM to decide on a tool
     try:
+        # Note: the genai `generate_content` API does not accept a 'tools' parameter
+        # in this SDK. We instead rely on the model generating structured function
+        # calls in its content; the agent will parse `response.function_calls` and
+        # map them to local functions via the `tools` dict.
         response = client.models.generate_content(
             model='gemini-2.5-flash',
-            contents=user_query,
-            tools=list(tools.values()) # Pass the functions as tools
+            contents=user_query
         )
     except Exception as e:
         # Replaces temporary debug print with a controlled return
