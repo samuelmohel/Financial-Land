@@ -1,5 +1,4 @@
 import logging
-from config import settings
 
 def process_document(file_path: str, company_id: str, doc_type: str) -> list[dict]:
     """

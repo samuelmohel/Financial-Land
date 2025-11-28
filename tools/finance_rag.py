@@ -1,5 +1,4 @@
 import logging
-import os
 from google import genai
 from config import settings
 from tools.rag_retriever import retrieve_documents

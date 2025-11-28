@@ -1,6 +1,5 @@
 import logging
 from config import settings
-import requests
 # import chromadb # Example vector store client
 # from google import genai
 

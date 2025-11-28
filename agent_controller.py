@@ -1,6 +1,5 @@
 # agent_controller.py
 
-import json
 import logging
 from google import genai
 from config import settings

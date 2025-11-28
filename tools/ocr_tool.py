@@ -1,5 +1,4 @@
 import logging
-from config import settings
 # from PIL import Image
 # import pytesseract # Tesseract is a common OCR engine
 
