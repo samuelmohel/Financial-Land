@@ -7,7 +7,7 @@ from config import settings
 app = FastAPI(
     title=f"{settings.APP_NAME} API",
     version="1.0.0",
-    description="Backend for the Financial Intelligence Platform powered by Gemini AI."
+    description="Backend for the Financial Intelligence Platform powered by configurable LLM providers (Gemini/Groq)."
 )
 
 # Include the main query router

@@ -1,7 +1,4 @@
-import json
 from unittest.mock import Mock
-
-import pytest
 
 from config import settings
 
@@ -61,14 +58,64 @@ def test_gemini_generate_content_uses_genai(monkeypatch):
         def __init__(self, api_key=None):
             self.models = FakeModels()
 
-    import importlib, sys, types
+    import importlib
+    import sys
+    import types
     fake_google = types.SimpleNamespace(genai=Mock())
     fake_google.genai.Client.return_value = FakeClient()
     monkeypatch.setitem(sys.modules, 'google', fake_google)
     # ensure llm_client reloads google import
-    import importlib
-    mod = importlib.reload(importlib.import_module('llm_client'))
+    importlib.reload(importlib.import_module('llm_client'))
 
     resp = generate_content('Hello Gem')
     assert resp.text == 'hello from gemini'
     assert isinstance(resp.function_calls, list)
+
+
+def test_groq_rate_limit_fallback(monkeypatch):
+    from llm_client import generate_content
+    import requests
+
+    # Arrange
+    settings.LLM_PROVIDER = 'groq'
+    settings.GROQ_API_KEY = 'mock-key'
+    settings.GROQ_MODEL = 'llama-3.3-70b-versatile'
+
+    # First response: 429 Resource Exhausted
+    error_body = {'error': {'code': 'RESOURCE_EXHAUSTED', 'message': 'You exceeded your current quota', 'status': 'RESOURCE_EXHAUSTED'}}
+    good_body = {'choices': [{'message': {'content': 'Hello after fallback'}}]}
+
+    state = {'calls': 0}
+
+    def fake_post(url, json=None, headers=None, timeout=30):
+        class Resp:
+            def __init__(self, ok, status, body):
+                self._ok = ok
+                self.status_code = status
+                self._body = body
+
+            def raise_for_status(self):
+                if not self._ok:
+                    raise requests.exceptions.HTTPError("HTTP %s" % self.status_code)
+
+            def json(self):
+                return self._body
+
+            @property
+            def text(self):
+                return str(self._body)
+
+        state['calls'] += 1
+        if state['calls'] == 1:
+            return Resp(False, 429, error_body)
+        else:
+            return Resp(True, 200, good_body)
+
+    monkeypatch.setattr('llm_client.requests.post', fake_post)
+
+    # Act
+    resp = generate_content('test rate limit fallback')
+
+    # Assert
+    assert isinstance(resp.text, str)
+    assert resp.text == 'Hello after fallback'

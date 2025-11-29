@@ -64,6 +64,19 @@ jobs:
         run: |
           ruff check .
 
+      - name: Pre-check secrets and .env
+        run: |
+          # Ensure .env isn't checked into the repo
+          if git ls-files --error-unmatch .env; then echo ".env committed - remove it from version control" && exit 1; fi
+          # Simple scan for common-looking API key patterns
+          if git grep -nE "AIza|AKIA|GROQ_API_KEY\s*=|GEMINI_API_KEY\s*="; then
+            echo "Potential secrets detected in repo files" && exit 1
+          fi
+
+      - name: Run linter (ruff)
+        run: |
+          ruff check .
+
       - name: Run tests
         run: |
           pytest -q

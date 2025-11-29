@@ -1,7 +1,16 @@
 import logging
-
+import time
 import requests
+from requests.exceptions import RequestException
 from config import settings
+from utils.circuit_breaker import CircuitBreaker
+
+cb = CircuitBreaker(failure_threshold=3, reset_timeout=60)
+
+
+class ToolExecutionError(Exception):
+    pass
+
 
 def get_exchange_rate(source_currency: str, target_currency: str) -> float:
     """
@@ -29,22 +38,35 @@ def get_exchange_rate(source_currency: str, target_currency: str) -> float:
         headers = {}
 
     logger = logging.getLogger(__name__)
-    try:
-        response = requests.get(api_url, headers=headers, timeout=5)
-        response.raise_for_status()
-        data = response.json()
-        rates = data.get('rates', {})
-        rate = rates.get(target_currency.upper())
-        if rate is None:
-            raise KeyError(f"Target currency '{target_currency}' not found in response")
-        return float(rate)
-        
-    except requests.RequestException as e:
-        logger.error("Network/API error fetching exchange rate: %s", e)
-        return 0.0
-    except KeyError as e:
-        logger.warning("Target currency not found in API response: %s", e)
-        return 0.0
+    key_name = 'get_exchange_rate'
+    if cb.is_open(key_name):
+        raise ToolExecutionError('Circuit breaker is open for get_exchange_rate')
+
+    retries = 3
+    backoff = 1.0
+    for attempt in range(1, retries + 1):
+        try:
+            response = requests.get(api_url, headers=headers, timeout=5)
+            response.raise_for_status()
+            data = response.json()
+            rates = data.get('rates', {})
+            rate = rates.get(target_currency.upper())
+            if rate is None:
+                raise KeyError(f"Target currency '{target_currency}' not found in response")
+            cb.record_success(key_name)
+            return float(rate)
+
+        except RequestException as e:
+            logger.error("Network/API error fetching exchange rate (attempt %s): %s", attempt, e)
+            if attempt == retries:
+                cb.record_failure(key_name)
+                raise ToolExecutionError(str(e))
+            time.sleep(backoff)
+            backoff *= 2.0
+        except KeyError as e:
+            # No point retrying if the currency isn't present
+            logger.warning("Target currency not found in API response: %s", e)
+            raise ToolExecutionError(str(e))
 
 if __name__ == '__main__':
     # Example usage:

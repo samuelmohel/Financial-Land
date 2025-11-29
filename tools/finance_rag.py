@@ -1,15 +1,10 @@
 import logging
-from google import genai
 from config import settings
+from llm_client import generate_content
 from tools.rag_retriever import retrieve_documents
 
-# Initialize the Gemini client
 logger = logging.getLogger(__name__)
-try:
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
-except Exception as e:
-    logger.exception("Failed to initialize Gemini client for RAG: %s", e)
-    client = None
+# No SDK client initialization here; use provider-agnostic `generate_content` in llm_client
 
 RAG_MODEL = settings.RAG_MODEL
 
@@ -40,18 +35,11 @@ def generate_rag_answer(user_query: str) -> dict:
             f"{user_query}"
         )
 
-        # 3. Generation
-        if not client:
-            logger.error("No Gemini client available for RAG generation.")
-            raise RuntimeError("Gemini client not initialized")
-
-        response = client.models.generate_content(
-            model=RAG_MODEL,
-            contents=prompt
-        )
+        # 3. Generation - use the provider-agnostic generate_content wrapper
+        response = generate_content(prompt, model=RAG_MODEL)
 
         return {
-            "answer": response.text,
+            "answer": getattr(response, 'text', str(response)),
             "sources": citations,
             "audit_success": True
         }

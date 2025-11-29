@@ -34,8 +34,12 @@ pandas
 pytest
 pytest-mock
 ruff
-pytest
-ruff
+chromadb
+weaviate-client
+scikit-learn
+
+# Groq client for Groq LLM provider
+groq
 
 # Document Handling (Lite version)
 # pypdf (for doc_analyzer.py)
