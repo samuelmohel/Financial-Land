@@ -107,7 +107,11 @@ def retrieve_documents(query: str, k: int) -> Tuple[List[str], List[str]]:
                 _chroma_client = chromadb.Client()
             col = _chroma_client.get_collection("finance_land")
             query_emb = get_embedding(query)
-            results = col.query(queries=[query], n_results=k, include=['documents', 'metadatas'])
+            # Attempt an embedding-based query for better semantic matching.
+            try:
+                results = col.query(query_embeddings=[query_emb], n_results=k, include=['documents', 'metadatas'])
+            except Exception:
+                results = col.query(queries=[query], n_results=k, include=['documents', 'metadatas'])
             docs = results.get('documents', [])
             metadatas = results.get('metadatas', [])
             # results documents is a list of lists
